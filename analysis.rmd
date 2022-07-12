@@ -3,6 +3,8 @@ output:
   pdf_document: default
   html_document: default
 ---
+
+Downloading packages and reading the data 
 ```{r,warning=FALSE}
 library(data.table)
 library(effects)
@@ -40,7 +42,7 @@ library(ggplot2)
 library(sjPlot)
 library(sjmisc)
 
-
+# reading and sorting the data. 
 block_1_1<-read.csv("Block_1.csv")
 block_2_1<-read.csv("Block_2.csv")
 block_8_1<-read.csv("Block_8.csv")
@@ -74,9 +76,9 @@ block_8_2$type<-"new"
 block_9_2$type<-"new"
 
 data<-rbind(block_1_1,block_1_2,block_2_1,block_2_2,block_8_1,block_8_2,block_9_1,block_9_2)
-data$Date <- as.Date(data$Date , "%d/%m/%Y")
+data$Date <- as.Date(data$Date , "%d/%m/%Y") # converting to date format 
 
-# insert time before/after intervention T/F
+# insert time before/after intervention True/False
 
 df1<-data[data$Date<="2021-09-20",]
 df1<-df1[df1$Date>="2020-03-10",]
@@ -99,24 +101,26 @@ data$block<-as.character(data$block)
 ```
 
 
-
+Figure 1 plot
 ```{r}
 d<-data.frame(date=as.Date("21/03/2022","%d/%m/%Y"),event="Intervention Starts")
 d2<-data.frame(date=as.Date("01/01/2021","%d/%m/%Y"),event="Residential Halls impacted\n due to COVID-19")
 ggplot(data,aes(x=Date,y=PeriodValue))+geom_line(aes(color=block))+geom_vline(data=d, mapping=aes(xintercept=date), color="blue",size=0.5)+geom_text(data=d, mapping=aes(x=date, y=23, label=event), size=3.5, angle=90, vjust=-0.4, hjust=0)+scale_x_date(date_breaks = "months" , date_labels = "%b-%y")+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=0.5,size=9))+annotate("rect", xmin=as.Date("10/03/2020","%d/%m/%Y"), xmax=as.Date("20/09/2021","%d/%m/%Y"), ymin=0, ymax=Inf, alpha=0.15, fill="red")+geom_text(data=d2, mapping=aes(x=date, y=25, label=event), size=4)+ylab( expression ("Water Consumption in "~m^3))
 ```
 
+fixed-effects model
 ```{r}
 model <- plm((PeriodValue)~intervention+covid,data = data,index = c("block","Date"), model="within",effects="twoways")
 summary(model)
 ```
-
+Summary 
 ```{r}
 stargazer(model, type = "text",add.lines=list(c("Between R2",round(r.squared(update(model, effect = "individual", model = "between")), 3))))
 ```
 
 
-
+Testing for best model (OLS vs fixed vs pooled)
+Testing for the prescence of random or fixed effects. 
 ```{r}
 pooled_model <- plm((PeriodValue)~intervention+covid,data = data,index = c("block","Date"), model="pooling",effects="twoways")
 fixed_model <- plm((PeriodValue)~intervention+covid,data = data,index = c("block","Date"), model="within",effects="twoways")
@@ -131,29 +135,7 @@ plmtest(pooled_model, type=c("bp"))
 plmtest(fixed_model, c("time"), type=("bp"))
 ```
 
+testing for multi-collinearity assumption
 ```{r}
 vif(lm((PeriodValue~intervention+covid+block),data=data))
 ```
-```{r}
-relevant_data<-subset(data,select=c(PeriodValue,block,intervention))
-relevant_data_after<-relevant_data[!relevant_data$intervention=="Before intervention",]
-relevant_data_after$intervention<-"After Intervention"
-relevant_data<-rbind((relevant_data[relevant_data$intervention=="Before intervention",]),relevant_data_after)
-dcast((aggregate(PeriodValue~.,data=relevant_data,FUN=mean)),block~intervention,value.var = "PeriodValue")
-```
-
-
-```{r}
-relevant_data<-subset(data,select=c(PeriodValue,block,covid))
-relevant_data_after<-relevant_data[relevant_data$covid==FALSE,]
-relevant_data_after$covid<-"Not impacted by COVID"
-relevant_data_before<-relevant_data[relevant_data$covid==TRUE,]
-relevant_data_before$covid<-"Impacted by COVID"
-relevant_data<-rbind(relevant_data_before,relevant_data_after)
-dcast((aggregate(PeriodValue~.,data=relevant_data,FUN=mean)),block~covid,value.var = "PeriodValue")
-```
-
-```{r}
-summary(data$PeriodValue)
-```
-
